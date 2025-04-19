@@ -127,8 +127,8 @@ class Blackjack {
     }
 
     inicializarWebSocket() {
-        // URL del servidor en la nube (cambiaremos esto cuando tengamos la URL de Render)
-        const wsUrl = 'wss://blackjack-online-7q0y.onrender.com';
+        // Conectar al servidor local
+        const wsUrl = 'ws://localhost:3000';
         this.ws = new WebSocket(wsUrl);
         
         this.ws.onopen = () => {

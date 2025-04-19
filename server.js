@@ -14,6 +14,11 @@ app.use(cors());
 // Servir archivos estáticos
 app.use(express.static(__dirname));
 
+// Ruta específica para la página principal
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'blackjack.html'));
+});
+
 const salas = new Map();
 
 wss.on('connection', (ws) => {
