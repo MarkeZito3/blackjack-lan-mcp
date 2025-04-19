@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blackjack Online</title>
+    <link rel="stylesheet" href="blackjack.css">
+</head>
+<body>
+    <div id="pantalla-inicio" class="pantalla-inicio">
+        <h1>Blackjack Online</h1>
+        <div class="botones-inicio">
+            <button id="crear-sala" class="boton">Crear Sala</button>
+            <div class="unirse-sala">
+                <input type="text" id="codigo-sala" placeholder="Código de sala">
+                <button id="unirse-sala" class="boton">Unirse a Sala</button>
+            </div>
+        </div>
+        <div id="codigo-sala-display" class="codigo-sala-display" style="display: none;">
+            Código de sala: <span id="codigo"></span>
+        </div>
+        <div id="estado-conexion" class="estado-conexion"></div>
+    </div>
+
+    <div id="mesa" class="mesa" style="display: none;">
+        <div class="area-crupier">
+            <h2>Crupier</h2>
+            <div id="mano-crupier" class="mano"></div>
+            <div id="valor-crupier" class="valor"></div>
+        </div>
+
+        <div class="area-jugador">
+            <h2>Tu Mano</h2>
+            <div id="mano-jugador" class="mano"></div>
+            <div id="valor-jugador" class="valor"></div>
+        </div>
+
+        <div class="controles">
+            <button id="pedir-carta" class="boton">Pedir Carta</button>
+            <button id="plantarse" class="boton">Plantarse</button>
+            <button id="nueva-partida" class="boton" style="display: none;">Nueva Partida</button>
+        </div>
+
+        <div id="mensaje" class="mensaje"></div>
+    </div>
+    <script src="blackjack.js"></script>
+</body>
+</html>
