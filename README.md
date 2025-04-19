@@ -21,6 +21,24 @@ En este proyecto de Blackjack LAN, utilizamos varios MCPs emocionantes:
 3. 📄 **file MCP**: Para manejar archivos completos
 4. 🔧 **instructions MCP**: Para dar instrucciones específicas a la IA
 5. 💭 **reminder MCP**: Para mantener las mejores prácticas
+6. 🐙 **GitHub MCP**: Para gestión completa del repositorio
+   - Creación automática del repositorio en GitHub
+   - Control de versiones integrado
+   - Commits automáticos con descripciones detalladas
+   - Publicación remota en GitHub
+   - Sincronización constante entre local y remoto
+   - Gestión de credenciales segura a través de tokens
+
+### 🔐 Ejemplo de Uso del GitHub MCP
+
+El GitHub MCP fue fundamental en este proyecto para:
+1. Crear automáticamente el repositorio en GitHub
+2. Realizar commits con mensajes descriptivos
+3. Sincronizar cambios locales con el repositorio remoto
+4. Mantener un flujo de trabajo eficiente con GitHub
+
+La integración con GitHub a través del MCP permitió una experiencia fluida de desarrollo, 
+donde cada cambio se versionó y publicó de manera eficiente. 🚀
 
 ## ✨ Características Destacadas
 
@@ -28,6 +46,7 @@ En este proyecto de Blackjack LAN, utilizamos varios MCPs emocionantes:
 - 🎯 Creado con menos de 10 prompts a la IA
 - 💪 Demuestra el poder de los MCPs para generar código eficientemente
 - 🔄 Implementación rápida y efectiva
+- 📦 Gestión automatizada del repositorio con GitHub MCP
 
 ## 🌟 ¿Por qué Aprender MCPs?
 
