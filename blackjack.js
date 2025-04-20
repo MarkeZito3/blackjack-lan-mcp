@@ -94,6 +94,7 @@ class Blackjack {
         this.inicializarElementosUI();
         this.inicializarEventos();
         this.inicializarWebSocket();
+        this.jugadoresPlantados = new Set();
     }
 
     inicializarElementosUI() {
@@ -169,7 +170,9 @@ class Blackjack {
             case 'jugador_unido':
                 this.pantallaInicio.style.display = 'none';
                 this.mesaJuego.style.display = 'block';
-                this.iniciarJuego();
+                if (this.rol === 'crupier') {
+                    this.iniciarJuego();
+                }
                 break;
 
             case 'accion_jugador':
@@ -182,8 +185,7 @@ class Blackjack {
                 break;
 
             case 'jugador_desconectado':
-                this.mostrarMensaje('El jugador se ha desconectado');
-                this.terminarJuego();
+                this.mostrarMensaje(`El jugador ${data.jugadorId} se ha desconectado`);
                 break;
         }
     }
@@ -214,25 +216,62 @@ class Blackjack {
 
     manejarAccionJugador(data) {
         switch(data.accion) {
+            case 'cartas_iniciales':
+                if (this.rol === 'jugador') {
+                    this.manoJugador = new Mano();
+                    data.cartas.forEach(carta => {
+                        this.manoJugador.agregarCarta(new Carta(carta.palo, carta.valor));
+                    });
+                    this.manoCrupier = new Mano();
+                    data.cartasCrupier.forEach(carta => {
+                        this.manoCrupier.agregarCarta(new Carta(carta.palo, carta.valor));
+                    });
+                    this.actualizarMano(this.manoJugadorElement, this.manoJugador);
+                    this.actualizarMano(this.manoCrupierElement, this.manoCrupier, true);
+                    this.actualizarValores();
+                }
+                break;
+
             case 'pedir_carta':
                 if (this.rol === 'crupier') {
                     const carta = this.baraja.sacarCarta();
-                    this.enviarAccion('carta_dada', { carta });
-                    this.manoJugador.agregarCarta(carta);
-                    this.actualizarMano(this.manoJugadorElement, this.manoJugador);
+                    this.enviarAccion('carta_dada', { carta, jugadorId: data.jugadorId });
                 }
                 break;
 
             case 'carta_dada':
                 if (this.rol === 'jugador') {
-                    this.manoJugador.agregarCarta(data.carta);
+                    const carta = new Carta(data.carta.palo, data.carta.valor);
+                    this.manoJugador.agregarCarta(carta);
                     this.actualizarMano(this.manoJugadorElement, this.manoJugador);
+                    this.actualizarValores();
+
+                    if (this.manoJugador.getValor() > 21) {
+                        this.mostrarMensaje('¡Te has pasado de 21! ¡Has perdido!');
+                        this.enviarAccion('plantarse');
+                        this.terminarJuego();
+                    }
                 }
                 break;
 
             case 'plantarse':
                 if (this.rol === 'crupier') {
-                    this.jugarTurnoCrupier();
+                    this.jugadoresPlantados.add(data.jugadorId);
+                    if (this.jugadoresPlantados.size === Object.keys(this.jugadores).length) {
+                        this.jugarTurnoCrupier();
+                    }
+                }
+                break;
+
+            case 'turno_crupier':
+                if (this.rol === 'jugador') {
+                    const carta = new Carta(data.carta.palo, data.carta.valor);
+                    this.manoCrupier.agregarCarta(carta);
+                    this.actualizarMano(this.manoCrupierElement, this.manoCrupier, false);
+                    if (data.valorFinal !== undefined) {
+                        this.valorCrupierElement.textContent = `Valor: ${data.valorFinal}`;
+                        this.determinarGanador(data.valorFinal);
+                    }
                 }
                 break;
         }
@@ -286,6 +325,7 @@ class Blackjack {
         this.manoJugador = new Mano();
         this.manoCrupier = new Mano();
         this.juegoTerminado = false;
+        this.jugadoresPlantados.clear();
 
         // Limpiar el tablero
         this.manoCrupierElement.innerHTML = '';
@@ -302,10 +342,24 @@ class Blackjack {
         // Repartir cartas iniciales
         if (this.rol === 'crupier') {
             const cartasIniciales = {
-                jugador: [this.baraja.sacarCarta(), this.baraja.sacarCarta()],
                 crupier: [this.baraja.sacarCarta(), this.baraja.sacarCarta()]
             };
-            this.enviarAccion('cartas_iniciales', cartasIniciales);
+            
+            // Asignar cartas iniciales a cada jugador
+            Object.keys(this.jugadores || {}).forEach(jugadorId => {
+                cartasIniciales[jugadorId] = [this.baraja.sacarCarta(), this.baraja.sacarCarta()];
+            });
+
+            this.manoCrupier = new Mano();
+            cartasIniciales.crupier.forEach(carta => this.manoCrupier.agregarCarta(carta));
+            
+            this.enviarAccion('cartas_iniciales', {
+                cartasIniciales,
+                baraja: this.baraja
+            });
+
+            this.actualizarMano(this.manoCrupierElement, this.manoCrupier);
+            this.actualizarValores();
         }
 
         this.actualizarMano(this.manoJugadorElement, this.manoJugador);
@@ -349,11 +403,29 @@ class Blackjack {
         this.determinarGanador();
     }
 
-    determinarGanador() {
-        const valorJugador = this.manoJugador.getValor();
-        const valorCrupier = this.manoCrupier.getValor();
+    async jugarTurnoCrupier() {
+        // Mostrar todas las cartas del crupier
+        this.actualizarMano(this.manoCrupierElement, this.manoCrupier, false);
 
-        this.actualizarValores();
+        while (this.manoCrupier.getValor() < 17) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            const carta = this.baraja.sacarCarta();
+            this.manoCrupier.agregarCarta(carta);
+            this.enviarAccion('turno_crupier', { 
+                carta,
+                valorFinal: this.manoCrupier.getValor() 
+            });
+            this.actualizarMano(this.manoCrupierElement, this.manoCrupier, false);
+        }
+
+        const valorFinal = this.manoCrupier.getValor();
+        this.enviarAccion('turno_crupier', { valorFinal });
+        this.determinarGanador(valorFinal);
+    }
+
+    determinarGanador(valorCrupier = this.manoCrupier.getValor()) {
+        const valorJugador = this.manoJugador.getValor();
+        this.valorCrupierElement.textContent = `Valor: ${valorCrupier}`;
 
         if (valorCrupier > 21) {
             this.mostrarMensaje('¡El crupier se ha pasado! ¡Has ganado!');

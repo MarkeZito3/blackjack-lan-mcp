@@ -35,9 +35,14 @@ wss.on('connection', (ws) => {
                 salaId = Math.random().toString(36).substring(2, 8);
                 jugadorId = 'crupier';
                 salas.set(salaId, {
-                    crupier: ws,
+                    crupier: {
+                        ws: ws,
+                        mano: [],
+                        valor: 0
+                    },
                     jugadores: {},
-                    estado: 'esperando'
+                    estado: 'esperando',
+                    baraja: []
                 });
                 ws.send(JSON.stringify({
                     tipo: 'sala_creada',
@@ -52,10 +57,14 @@ wss.on('connection', (ws) => {
                 if (salas.has(salaId)) {
                     const sala = salas.get(salaId);
                     jugadorId = 'jugador' + Object.keys(sala.jugadores).length;
-                    sala.jugadores[jugadorId] = ws;
+                    sala.jugadores[jugadorId] = {
+                        ws: ws,
+                        mano: [],
+                        valor: 0
+                    };
                     
                     // Notificar a todos en la sala
-                    sala.crupier.send(JSON.stringify({
+                    sala.crupier.ws.send(JSON.stringify({
                         tipo: 'jugador_unido',
                         jugadorId
                     }));
@@ -69,30 +78,71 @@ wss.on('connection', (ws) => {
                     if (Object.keys(sala.jugadores).length === 1) {
                         sala.estado = 'completa';
                         // Iniciar el juego
-                        sala.crupier.send(JSON.stringify({ tipo: 'iniciar_juego' }));
-                        sala.jugadores[jugadorId].send(JSON.stringify({ tipo: 'iniciar_juego' }));
+                        sala.crupier.ws.send(JSON.stringify({ tipo: 'iniciar_juego' }));
+                        Object.values(sala.jugadores).forEach(jugador => {
+                            jugador.ws.send(JSON.stringify({ tipo: 'iniciar_juego' }));
+                        });
                     }
-                    console.log(`Jugador ${jugadorId} unido a la sala ${salaId}`);
                 } else {
                     ws.send(JSON.stringify({
                         tipo: 'error',
                         mensaje: 'Sala no encontrada'
                     }));
-                    console.log(`Intento fallido de unirse a sala: ${salaId}`);
                 }
                 break;
 
             case 'accion_jugador':
                 if (salas.has(salaId)) {
                     const sala = salas.get(salaId);
-                    console.log(`Acción de jugador en sala ${salaId}:`, data);
-                    // Reenviar la acción al otro jugador
-                    if (jugadorId === 'crupier') {
-                        Object.values(sala.jugadores).forEach(jugador => {
-                            jugador.send(JSON.stringify(data));
+                    if (data.accion === 'cartas_iniciales' && jugadorId === 'crupier') {
+                        // Distribuir las cartas iniciales a todos los jugadores
+                        sala.baraja = data.baraja;
+                        Object.entries(sala.jugadores).forEach(([id, jugador]) => {
+                            jugador.mano = data.cartasIniciales[id] || [];
+                            jugador.ws.send(JSON.stringify({
+                                tipo: 'accion_jugador',
+                                accion: 'cartas_iniciales',
+                                cartas: jugador.mano,
+                                cartasCrupier: data.cartasIniciales.crupier
+                            }));
                         });
-                    } else {
-                        sala.crupier.send(JSON.stringify(data));
+                        sala.crupier.mano = data.cartasIniciales.crupier;
+                    } else if (data.accion === 'pedir_carta') {
+                        // Manejar petición de carta
+                        if (jugadorId !== 'crupier') {
+                            sala.crupier.ws.send(JSON.stringify({
+                                tipo: 'accion_jugador',
+                                accion: 'pedir_carta',
+                                jugadorId
+                            }));
+                        }
+                    } else if (data.accion === 'carta_dada') {
+                        // Enviar la carta al jugador específico
+                        const jugador = sala.jugadores[data.jugadorId];
+                        if (jugador) {
+                            jugador.ws.send(JSON.stringify({
+                                tipo: 'accion_jugador',
+                                accion: 'carta_dada',
+                                carta: data.carta
+                            }));
+                        }
+                    } else if (data.accion === 'plantarse') {
+                        // Notificar al crupier que el jugador se plantó
+                        sala.crupier.ws.send(JSON.stringify({
+                            tipo: 'accion_jugador',
+                            accion: 'plantarse',
+                            jugadorId
+                        }));
+                    } else if (data.accion === 'turno_crupier') {
+                        // Transmitir las acciones del crupier a todos los jugadores
+                        Object.values(sala.jugadores).forEach(jugador => {
+                            jugador.ws.send(JSON.stringify({
+                                tipo: 'accion_jugador',
+                                accion: 'turno_crupier',
+                                carta: data.carta,
+                                valorFinal: data.valorFinal
+                            }));
+                        });
                     }
                 }
                 break;
@@ -106,7 +156,7 @@ wss.on('connection', (ws) => {
             if (jugadorId === 'crupier') {
                 // Notificar a los jugadores que el crupier se desconectó
                 Object.values(sala.jugadores).forEach(jugador => {
-                    jugador.send(JSON.stringify({
+                    jugador.ws.send(JSON.stringify({
                         tipo: 'crupier_desconectado'
                     }));
                 });
@@ -114,7 +164,7 @@ wss.on('connection', (ws) => {
             } else {
                 // Eliminar al jugador de la sala
                 delete sala.jugadores[jugadorId];
-                sala.crupier.send(JSON.stringify({
+                sala.crupier.ws.send(JSON.stringify({
                     tipo: 'jugador_desconectado',
                     jugadorId
                 }));
