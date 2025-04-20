@@ -10,6 +10,7 @@
     <div id="pantalla-inicio" class="pantalla-inicio">
         <h1>Blackjack Online</h1>
         <div class="botones-inicio">
+            <input type="text" id="nombre-jugador" placeholder="Tu nombre" class="input-nombre">
             <button id="crear-sala" class="boton">Crear Sala</button>
             <div class="unirse-sala">
                 <input type="text" id="codigo-sala" placeholder="Código de sala">
@@ -23,14 +24,19 @@
     </div>
 
     <div id="mesa" class="mesa" style="display: none;">
+        <div class="jugadores-lista">
+            <h3>Jugadores en la Sala:</h3>
+            <div id="lista-jugadores"></div>
+        </div>
+
         <div class="area-crupier">
-            <h2>Crupier</h2>
+            <h2>Host</h2>
             <div id="mano-crupier" class="mano"></div>
             <div id="valor-crupier" class="valor"></div>
         </div>
 
         <div class="area-jugador">
-            <h2>Tu Mano</h2>
+            <h2 id="nombre-jugador-display">Tu Mano</h2>
             <div id="mano-jugador" class="mano"></div>
             <div id="valor-jugador" class="valor"></div>
         </div>

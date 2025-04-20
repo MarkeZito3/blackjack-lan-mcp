@@ -25,6 +25,7 @@ wss.on('connection', (ws) => {
     console.log('Nueva conexión establecida');
     let salaId = '';
     let jugadorId = '';
+    let nombreJugador = '';
 
     ws.on('message', (mensaje) => {
         const data = JSON.parse(mensaje);
@@ -34,9 +35,11 @@ wss.on('connection', (ws) => {
             case 'crear_sala':
                 salaId = Math.random().toString(36).substring(2, 8);
                 jugadorId = 'crupier';
+                nombreJugador = data.nombre;
                 salas.set(salaId, {
                     crupier: {
                         ws: ws,
+                        nombre: nombreJugador,
                         mano: [],
                         valor: 0
                     },
@@ -49,35 +52,58 @@ wss.on('connection', (ws) => {
                     salaId,
                     jugadorId
                 }));
-                console.log(`Sala creada: ${salaId}`);
+                console.log(`Sala creada: ${salaId} por ${nombreJugador}`);
                 break;
 
             case 'unirse_sala':
                 salaId = data.salaId;
+                nombreJugador = data.nombre;
                 if (salas.has(salaId)) {
                     const sala = salas.get(salaId);
                     jugadorId = 'jugador' + Object.keys(sala.jugadores).length;
                     sala.jugadores[jugadorId] = {
                         ws: ws,
+                        nombre: nombreJugador,
                         mano: [],
                         valor: 0
                     };
                     
-                    // Notificar a todos en la sala
+                    // Preparar lista de jugadores sin los objetos ws
+                    const jugadoresInfo = {
+                        crupier: { nombre: sala.crupier.nombre }
+                    };
+                    Object.entries(sala.jugadores).forEach(([id, jugador]) => {
+                        jugadoresInfo[id] = { nombre: jugador.nombre };
+                    });
+
+                    // Notificar al crupier
                     sala.crupier.ws.send(JSON.stringify({
                         tipo: 'jugador_unido',
-                        jugadorId
+                        jugadorId,
+                        nombre: nombreJugador
                     }));
                     
+                    // Notificar al nuevo jugador
                     ws.send(JSON.stringify({
                         tipo: 'unido_exitosamente',
                         jugadorId,
-                        salaId
+                        salaId,
+                        jugadores: jugadoresInfo
                     }));
+
+                    // Notificar a los demás jugadores
+                    Object.entries(sala.jugadores).forEach(([id, jugador]) => {
+                        if (id !== jugadorId) {
+                            jugador.ws.send(JSON.stringify({
+                                tipo: 'jugador_unido',
+                                jugadorId,
+                                nombre: nombreJugador
+                            }));
+                        }
+                    });
 
                     if (Object.keys(sala.jugadores).length === 1) {
                         sala.estado = 'completa';
-                        // Iniciar el juego
                         sala.crupier.ws.send(JSON.stringify({ tipo: 'iniciar_juego' }));
                         Object.values(sala.jugadores).forEach(jugador => {
                             jugador.ws.send(JSON.stringify({ tipo: 'iniciar_juego' }));
@@ -107,6 +133,17 @@ wss.on('connection', (ws) => {
                             }));
                         });
                         sala.crupier.mano = data.cartasIniciales.crupier;
+                    } else if (data.accion === 'juego_terminado') {
+                        // Enviar el estado final del juego a todos los jugadores
+                        Object.values(sala.jugadores).forEach(jugador => {
+                            jugador.ws.send(JSON.stringify({
+                                tipo: 'accion_jugador',
+                                accion: 'juego_terminado',
+                                valorHost: data.valorHost,
+                                cartasHost: data.cartasHost,
+                                jugadores: data.jugadores
+                            }));
+                        });
                     } else if (data.accion === 'pedir_carta') {
                         // Manejar petición de carta
                         if (jugadorId !== 'crupier') {
@@ -150,24 +187,33 @@ wss.on('connection', (ws) => {
     });
 
     ws.on('close', () => {
-        console.log(`Conexión cerrada para ${jugadorId} en sala ${salaId}`);
+        console.log(`Conexión cerrada para ${nombreJugador} (${jugadorId}) en sala ${salaId}`);
         if (salaId && salas.has(salaId)) {
             const sala = salas.get(salaId);
             if (jugadorId === 'crupier') {
-                // Notificar a los jugadores que el crupier se desconectó
                 Object.values(sala.jugadores).forEach(jugador => {
                     jugador.ws.send(JSON.stringify({
-                        tipo: 'crupier_desconectado'
+                        tipo: 'crupier_desconectado',
+                        nombre: nombreJugador
                     }));
                 });
                 salas.delete(salaId);
             } else {
-                // Eliminar al jugador de la sala
                 delete sala.jugadores[jugadorId];
+                // Notificar al crupier
                 sala.crupier.ws.send(JSON.stringify({
                     tipo: 'jugador_desconectado',
-                    jugadorId
+                    jugadorId,
+                    nombre: nombreJugador
                 }));
+                // Notificar a los demás jugadores
+                Object.values(sala.jugadores).forEach(jugador => {
+                    jugador.ws.send(JSON.stringify({
+                        tipo: 'jugador_desconectado',
+                        jugadorId,
+                        nombre: nombreJugador
+                    }));
+                });
             }
         }
     });

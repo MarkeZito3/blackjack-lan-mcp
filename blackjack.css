@@ -178,3 +178,37 @@ body {
 .carta {
     animation: aparecer-carta 0.3s ease-out;
 }
+
+.input-nombre {
+    padding: 0.8rem;
+    border-radius: 5px;
+    border: none;
+    width: 200px;
+    font-size: 1rem;
+    margin-bottom: 1rem;
+}
+
+.jugadores-lista {
+    background-color: rgba(0, 0, 0, 0.2);
+    padding: 1rem;
+    border-radius: 10px;
+    margin-bottom: 2rem;
+}
+
+.jugadores-lista h3 {
+    color: #ffd700;
+    margin-bottom: 1rem;
+}
+
+#lista-jugadores {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.jugador-item {
+    background-color: rgba(255, 215, 0, 0.1);
+    padding: 0.5rem 1rem;
+    border-radius: 5px;
+    color: #ffd700;
+}

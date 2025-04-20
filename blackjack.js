@@ -91,6 +91,8 @@ class Blackjack {
         this.juegoTerminado = false;
         this.rol = null; // 'crupier' o 'jugador'
         this.salaId = null;
+        this.nombreJugador = '';
+        this.jugadores = new Map(); // Mapa para almacenar los jugadores y sus estados
         this.inicializarElementosUI();
         this.inicializarEventos();
         this.inicializarWebSocket();
@@ -104,9 +106,12 @@ class Blackjack {
         this.crearSalaBtn = document.getElementById('crear-sala');
         this.unirseSalaBtn = document.getElementById('unirse-sala');
         this.codigoSalaInput = document.getElementById('codigo-sala');
+        this.nombreJugadorInput = document.getElementById('nombre-jugador');
         this.codigoSalaDisplay = document.getElementById('codigo-sala-display');
         this.codigoSpan = document.getElementById('codigo');
         this.estadoConexion = document.getElementById('estado-conexion');
+        this.listaJugadores = document.getElementById('lista-jugadores');
+        this.nombreJugadorDisplay = document.getElementById('nombre-jugador-display');
 
         // Elementos del juego
         this.manoCrupierElement = document.getElementById('mano-crupier');
@@ -158,6 +163,8 @@ class Blackjack {
                 this.codigoSpan.textContent = this.salaId;
                 this.codigoSalaDisplay.style.display = 'block';
                 this.estadoConexion.textContent = 'Esperando a otro jugador...';
+                this.jugadores.set('crupier', { nombre: this.nombreJugador });
+                this.actualizarListaJugadores();
                 break;
 
             case 'unido_exitosamente':
@@ -165,9 +172,14 @@ class Blackjack {
                 this.rol = 'jugador';
                 this.pantallaInicio.style.display = 'none';
                 this.mesaJuego.style.display = 'block';
+                this.nombreJugadorDisplay.textContent = `Tu Mano (${this.nombreJugador})`;
+                this.jugadores = new Map(Object.entries(data.jugadores));
+                this.actualizarListaJugadores();
                 break;
 
             case 'jugador_unido':
+                this.jugadores.set(data.jugadorId, { nombre: data.nombre });
+                this.actualizarListaJugadores();
                 this.pantallaInicio.style.display = 'none';
                 this.mesaJuego.style.display = 'block';
                 if (this.rol === 'crupier') {
@@ -185,23 +197,82 @@ class Blackjack {
                 break;
 
             case 'jugador_desconectado':
-                this.mostrarMensaje(`El jugador ${data.jugadorId} se ha desconectado`);
+                this.jugadores.delete(data.jugadorId);
+                this.actualizarListaJugadores();
+                this.mostrarMensaje(`${data.nombre} se ha desconectado`);
                 break;
         }
     }
 
+    actualizarListaJugadores() {
+        this.listaJugadores.innerHTML = '';
+        
+        // Agregar el host
+        if (this.jugadores.has('crupier')) {
+            const hostItem = document.createElement('div');
+            hostItem.className = 'jugador-item';
+            const hostInfo = this.jugadores.get('crupier');
+            hostItem.textContent = `👑 ${hostInfo.nombre} (Host)`;
+            if (this.juegoTerminado) {
+                const valorHost = this.manoCrupier.getValor();
+                hostItem.textContent += ` - Valor: ${valorHost}`;
+            }
+            this.listaJugadores.appendChild(hostItem);
+        }
+
+        // Agregar otros jugadores
+        this.jugadores.forEach((jugador, id) => {
+            if (id !== 'crupier') {
+                const jugadorItem = document.createElement('div');
+                jugadorItem.className = 'jugador-item';
+                jugadorItem.textContent = `👤 ${jugador.nombre}`;
+                if (this.juegoTerminado && jugador.valor !== undefined) {
+                    jugadorItem.textContent += ` - Valor: ${jugador.valor}`;
+                }
+                this.listaJugadores.appendChild(jugadorItem);
+            }
+        });
+    }
+
+    calcularValorMano(mano) {
+        let valor = 0;
+        let ases = 0;
+        mano.forEach(carta => {
+            if (carta.valor === 1) ases++;
+            valor += carta instanceof Carta ? carta.getValorNumerico() : 
+                    (carta.valor > 10 ? 10 : (carta.valor === 1 ? 11 : carta.valor));
+        });
+        while (valor > 21 && ases > 0) {
+            valor -= 10;
+            ases--;
+        }
+        return valor;
+    }
+
     crearSala() {
+        this.nombreJugador = this.nombreJugadorInput.value.trim();
+        if (!this.nombreJugador) {
+            alert('Por favor, ingresa tu nombre');
+            return;
+        }
         this.ws.send(JSON.stringify({
-            tipo: 'crear_sala'
+            tipo: 'crear_sala',
+            nombre: this.nombreJugador
         }));
     }
 
     unirseSala() {
         const codigo = this.codigoSalaInput.value.trim();
+        this.nombreJugador = this.nombreJugadorInput.value.trim();
+        if (!this.nombreJugador) {
+            alert('Por favor, ingresa tu nombre');
+            return;
+        }
         if (codigo) {
             this.ws.send(JSON.stringify({
                 tipo: 'unirse_sala',
-                salaId: codigo
+                salaId: codigo,
+                nombre: this.nombreJugador
             }));
         }
     }
@@ -272,6 +343,27 @@ class Blackjack {
                         this.valorCrupierElement.textContent = `Valor: ${data.valorFinal}`;
                         this.determinarGanador(data.valorFinal);
                     }
+                }
+                break;
+
+            case 'juego_terminado':
+                if (this.rol === 'jugador') {
+                    // Actualizar las cartas del host
+                    this.manoCrupier.cartas = data.cartasHost.map(carta => 
+                        new Carta(carta.palo, carta.valor)
+                    );
+                    this.actualizarMano(this.manoCrupierElement, this.manoCrupier, false);
+                    this.valorCrupierElement.textContent = `Valor: ${data.valorHost}`;
+                    
+                    // Actualizar la información de todos los jugadores
+                    data.jugadores.forEach(jugador => {
+                        if (this.jugadores.has(jugador.id)) {
+                            this.jugadores.get(jugador.id).mano = jugador.mano;
+                            this.jugadores.get(jugador.id).valor = jugador.valor;
+                        }
+                    });
+                    
+                    this.actualizarListaJugadores();
                 }
                 break;
         }
@@ -444,15 +536,38 @@ class Blackjack {
         this.juegoTerminado = true;
         this.pedirCartaBtn.style.display = 'none';
         this.plantarseBtn.style.display = 'none';
-        this.nuevaPartidaBtn.style.display = 'inline';
+        // Solo mostrar el botón de nueva partida al host
+        this.nuevaPartidaBtn.style.display = this.rol === 'crupier' ? 'inline' : 'none';
+        
+        // Mostrar todas las cartas y valores
+        this.actualizarMano(this.manoCrupierElement, this.manoCrupier, false);
         this.actualizarValores();
 
         if (this.rol === 'crupier') {
+            // Enviar información final de la partida a todos los jugadores
+            const jugadoresInfo = Array.from(this.jugadores.entries()).map(([id, jugador]) => ({
+                id,
+                nombre: jugador.nombre,
+                mano: jugador.mano || [],
+                valor: jugador.mano ? this.calcularValorMano(jugador.mano) : 0
+            }));
+
             this.enviarAccion('juego_terminado', {
-                valorJugador: this.manoJugador.getValor(),
-                valorCrupier: this.manoCrupier.getValor()
+                valorHost: this.manoCrupier.getValor(),
+                cartasHost: this.manoCrupier.cartas,
+                jugadores: jugadoresInfo
+            });
+
+            // Actualizar la información local del host también
+            jugadoresInfo.forEach(jugador => {
+                if (this.jugadores.has(jugador.id)) {
+                    this.jugadores.get(jugador.id).mano = jugador.mano;
+                    this.jugadores.get(jugador.id).valor = jugador.valor;
+                }
             });
         }
+
+        this.actualizarListaJugadores();
     }
 }
 
